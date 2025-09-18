@@ -115,10 +115,10 @@ ql-script-hub/
 
 #### ☁️ 百度网盘配置
 
-| 变量名 | 说明 | 示例 |
-|--------|------|------|
-| `BAIDU_COOKIE` | 网站Cookie | `BDUSS=xxx; STOKEN=xxx...` |
-| `PRIVACY_MODE` | 隐私模式 | `true` |
+| 变量名 | 说明                  | 示例                         |
+|--------|---------------------|----------------------------|
+| `BAIDU_COOKIE` | 网站Cookie            | `BDUSS=xxx; STOKEN=xxx...` |
+| `GROWTH_VALUE` | 每日的总成长值（用于计算升级天数） | `默认 25`                    |
 
 #### 📡 ikuuu签到配置
 
