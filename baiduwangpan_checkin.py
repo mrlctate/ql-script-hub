@@ -26,7 +26,7 @@ except ImportError:
 BAIDU_COOKIE = os.environ.get('BAIDU_COOKIE', '')
 max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "2000"))
 random_signin = os.getenv("RANDOM_SIGNIN", "true").lower() == "true"
-growth_value = os.environ.get('GROWTH_VALUE', '25')
+growth_value = int(os.environ.get("GROWTH_VALUE", "25"))
 
 HEADERS = {
     'Connection': 'keep-alive',
@@ -327,8 +327,8 @@ class BaiduPan:
         # 5. 组合结果消息
         final_msg = f"""🌟 百度网盘签到结果
 
-🏆 【当前等级】Lv{level} ({value}成长值)
-💎 【距升级Lv{count}】预计 {sum} 天 (还需{result}成长值)
+🏆 当前等级：Lv{level} ({value}成长值)
+💎 距升级Lv{count}：预计{sum}天({result}成长值)
 
         📝 签到: {signin_msg}"""
 
