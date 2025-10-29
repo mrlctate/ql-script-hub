@@ -1,16 +1,17 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
-cron: 0 5 * * *
+cron: 0 6 * * *
 new Env('百度网盘签到')
 """
+
 import math
 import os
 import time
 import re
 import requests
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ---------------- 统一通知模块加载 ----------------
 hadsend = False
@@ -24,9 +25,10 @@ except ImportError:
 
 # 配置项
 BAIDU_COOKIE = os.environ.get('BAIDU_COOKIE', '')
-max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "2000"))
+max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "1000"))
 random_signin = os.getenv("RANDOM_SIGNIN", "true").lower() == "true"
-growth_value = int(os.environ.get("GROWTH_VALUE", "25"))
+privacy_mode = os.getenv("PRIVACY_MODE", "true").lower() == "true"
+growth_value = int(os.getenv('GROWTH_VALUE', '25'))
 
 HEADERS = {
     'Connection': 'keep-alive',
@@ -43,6 +45,7 @@ HEADERS = {
     'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
 }
 
+
 def format_time_remaining(seconds):
     """格式化时间显示"""
     if seconds <= 0:
@@ -55,6 +58,7 @@ def format_time_remaining(seconds):
         return f"{minutes}分{secs}秒"
     else:
         return f"{secs}秒"
+
 
 def wait_with_countdown(delay_seconds, task_name):
     """带倒计时的随机延迟等待"""
@@ -69,6 +73,7 @@ def wait_with_countdown(delay_seconds, task_name):
         time.sleep(sleep_time)
         remaining -= sleep_time
 
+
 def notify_user(title, content):
     """统一通知函数"""
     if hadsend:
@@ -79,6 +84,7 @@ def notify_user(title, content):
             print(f"❌ 通知发送失败: {e}")
     else:
         print(f"📢 {title}\n📄 {content}")
+
 
 class BaiduPan:
     name = "百度网盘"
@@ -227,21 +233,47 @@ class BaiduPan:
     def get_user_info(self):
         """获取用户信息"""
         if not self.cookie.strip():
-            return "未知", "未知", "0"
+            return "未知用户", "未知", "未知", "未知", "未知", "未知", "未知",
 
         print("👤 正在获取用户信息...")
-        url = "https://pan.baidu.com/rest/2.0/membership/user?app_id=250528&web=5&method=query"
+        url1 = 'https://pan.baidu.com/rest/2.0/membership/user?app_id=250528&web=5&method=query'
+        url2 = 'https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo'
         signed_headers = HEADERS.copy()
         signed_headers['Cookie'] = self.cookie
 
         try:
-            resp = requests.get(url, headers=signed_headers, timeout=15)
-            if resp.status_code == 200:
-                current_level = re.search(r'current_level":(\d+)', resp.text)
-                current_value = re.search(r'current_value":(\d+)', resp.text)
+            resp1 = requests.get(url1, headers=signed_headers, timeout=15)
+            resp2 = requests.get(url2, headers=signed_headers, timeout=15)
+
+            if resp1.status_code == 200:
+                current_value = re.search(r'current_value":(\d+)', resp1.text)
+                current_level = re.search(r'current_level":(\d+)', resp1.text)
+
+                baidu_name = re.search(r'"baidu_name":"(.*?)"', resp2.text)
+                vip_type = re.search(r'"vip_type":(\d+)', resp2.text)
 
                 level = current_level.group(1) if current_level else "未知"
                 value = current_value.group(1) if current_value else "未知"
+                user = baidu_name.group(1) if baidu_name else "未知用户"
+
+                # VIP类型解析
+                vip_status = "普通用户"
+                if vip_type:
+                    vip_code = int(vip_type.group(1))
+                    if vip_code == 1:
+                        vip_status = "VIP"
+                    elif vip_code == 2:
+                        vip_status = "SVIP"
+                    elif vip_code == 3:
+                        vip_status = "年SVIP"
+
+                # 隐私保护处理
+                if privacy_mode and user != "未知用户":
+                    if len(user) > 2:
+                        user = f"{user[0]}***{user[-1]}"
+                    else:
+                        user = "***"
+
                 count = int(level) + 1
 
                 # 计算距升级
@@ -267,28 +299,29 @@ class BaiduPan:
                 elif count == 10:
                     total = "100000"
 
-                result = int(total) - int(value) # 距离升级成长值
+                result = int(total) - int(value)  # 距离升级成长值
 
                 sum = math.ceil(result / growth_value)
 
-                level_msg = f"当前会员等级: Lv.{level}，当前成长值: {value}, 距升级Lv.{count}预计 {sum} 天"
+                level_msg = f"当前会员等级: Lv.{level}，成长值: {value}，会员类型: {vip_status}, 距升级Lv.{count}: 预计 {sum} 天"
                 self.add_message(level_msg)
 
-                print(f"🏆 等级: Lv.{level}")
-                print(f"📊 当前成长值: {value}")
-                print(f"💎 距升级Lv.{count}: 预计 {sum} 天")
+                print(f"👤 用户: {user}")
+                print(f"🏆 会员等级: {vip_status} {level}")
+                print(f"📊 成长值: {value}")
+                print(f"💎 距升级{vip_status} {count}: 预计 {sum} 天")
 
-                return level, value, result, count, sum
+                return user, level, value, vip_status, result, count, sum
             else:
-                self.add_message(f"⚠️ 获取用户信息失败，状态码: {resp.status_code}")
-                return "未知", "未知", "0"
+                self.add_message(f"⚠️ 获取用户信息失败，状态码: {resp1.status_code}")
+                return "未知用户", "未知", "未知", "未知", "未知", "未知", "未知",
         except Exception as e:
             self.add_message(f"⚠️ 用户信息请求异常: {e}")
-            return "未知", "未知", "0"
+            return "未知用户", "未知", "未知", "未知", "未知", "未知", "未知",
 
     def main(self):
         """主执行函数"""
-        print(f"\n==== 百度网盘账号{self.index} 开始签到 ====")
+        print(f"\n=== 百度网盘账号{self.index} 开始签到 ===")
 
         if not self.cookie.strip():
             error_msg = """Cookie配置错误
@@ -322,29 +355,35 @@ class BaiduPan:
             answer_success, answer_msg = self.answer_question(answer, ask_id)
 
         # 4. 获取用户信息
-        level, value, result, count, sum = self.get_user_info()
+        user, level, value, vip_status, result, count, sum = self.get_user_info()
 
         # 5. 组合结果消息
         final_msg = f"""🌟 百度网盘签到结果
 
-🏆 当前等级：Lv{level} ({value}成长值)
-💎 距升级Lv{count}：预计{sum}天({result}成长值)
+👤 账号: {user}
+🏆 会员等级: {vip_status} {level} ({value}成长值)
+💎 距升级.{vip_status} {count}：预计{sum}天 ({result}成长值)
 
-        📝 签到: {signin_msg}"""
+📝 签到: {signin_msg}"""
 
         if answer_msg:
             final_msg += f"\n🤔 答题: {answer_msg}"
 
-        final_msg += f"\n⏰ 时间: {datetime.now().strftime('%m-%d %H:%M')}"
+        final_msg += f"\n⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
         # 签到或答题任一成功都算成功
         is_success = signin_success or answer_success
         print(f"{'✅ 任务完成' if is_success else '❌ 任务失败'}")
         return final_msg, is_success
 
+
 def main():
     """主程序入口"""
-    print(f"=== 百度网盘签到开始 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+    print(
+        f"=== 百度网盘签到开始 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+
+    # 显示配置状态
+    print(f"🔒 隐私保护模式: {'已启用' if privacy_mode else '已禁用'}")
 
     # 随机延迟（整体延迟）
     if random_signin:
@@ -375,7 +414,8 @@ def main():
 
     # 支持多账号（用换行分隔）
     if '\n' in baidu_cookies:
-        cookies = [cookie.strip() for cookie in baidu_cookies.split('\n') if cookie.strip()]
+        cookies = [cookie.strip()
+                   for cookie in baidu_cookies.split('\n') if cookie.strip()]
     else:
         cookies = [baidu_cookies.strip()]
 
@@ -421,11 +461,11 @@ def main():
             print(f"❌ {error_msg}")
 
             if index <= 1:
-                title = f"百度网盘 - 签到失败"
+                title = f"百度网盘 - 签到{status}"
             else:
-                title = f"百度网盘账号{index + 1}签到失败"
+                title = f"百度网盘账号{index + 1}签到{status}"
 
-            notify_user(title, error_msg)
+            notify_user(title, result_msg)
 
     # 发送汇总通知
     if total_count > 1:
@@ -446,11 +486,14 @@ def main():
 
         notify_user("百度网盘签到汇总", summary_msg)
 
-    print(f"\n=== 百度网盘签到完成 - 成功{success_count}/{total_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===")
+    print(
+        f"\n==== 百度网盘签到完成 - 成功{success_count}/{total_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ====")
+
 
 def handler(event, context):
     """云函数入口"""
     main()
+
 
 if __name__ == "__main__":
     main()
